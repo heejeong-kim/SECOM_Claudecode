@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>반도체 공정 품질 대시보드</title>
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist@2.27.0/plotly.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1e2730;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #7d8590;
+    --accent: #3b82f6;
+    --accent-dim: #1d4ed8;
+    --good: #22c55e;
+    --bad: #ef4444;
+    --warn: #f59e0b;
+    --radius: 10px;
+    --font: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── 헤더 ── */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .header-left h1 {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: var(--text);
+  }
+  .header-left p {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+  .header-meta {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .meta-chip {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .meta-chip span { color: var(--text); font-weight: 600; }
+
+  /* ── 필터 바 ── */
+  .filter-bar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 32px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .filter-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+  .filter-group {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .filter-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-family: var(--font);
+    padding: 4px 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .filter-btn:hover { border-color: var(--accent); color: var(--text); }
+  .filter-btn.active {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
+  .filter-sep {
+    width: 1px;
+    height: 20px;
+    background: var(--border);
+    flex-shrink: 0;
+  }
+  .reset-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-family: var(--font);
+    padding: 4px 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-left: auto;
+  }
+  .reset-btn:hover { border-color: var(--bad); color: var(--bad); }
+
+  /* ── 메인 ── */
+  .main { padding: 24px 32px; display: flex; flex-direction: column; gap: 24px; }
+
+  /* ── KPI 카드 ── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+  }
+  .kpi-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--accent);
+  }
+  .kpi-card.good::before { background: var(--good); }
+  .kpi-card.bad::before  { background: var(--bad); }
+  .kpi-card.warn::before { background: var(--warn); }
+
+  .kpi-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin-bottom: 8px;
+  }
+  .kpi-value {
+    font-size: 32px;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -1px;
+  }
+  .kpi-card.good .kpi-value { color: var(--good); }
+  .kpi-card.bad  .kpi-value { color: var(--bad); }
+  .kpi-card.warn .kpi-value { color: var(--warn); }
+  .kpi-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 6px;
+  }
+
+  /* ── 섹션 ── */
+  .section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin-bottom: 12px;
+    padding-left: 2px;
+    border-left: 3px solid var(--accent);
+    padding-left: 10px;
+  }
+
+  /* ── 차트 카드 ── */
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  .chart-card h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .chart-card p {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 14px;
+  }
+
+  /* ── 차트 그리드 ── */
+  .chart-row { display: grid; gap: 14px; }
+  .chart-row.col2 { grid-template-columns: 1fr 1fr; }
+  .chart-row.col4 { grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 1100px) { .chart-row.col4 { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 700px)  {
+    .chart-row.col2, .chart-row.col4 { grid-template-columns: 1fr; }
+    .main { padding: 16px; }
+    .header, .filter-bar { padding: 14px 16px; }
+  }
+
+  /* ── 경고 배너 ── */
+  .notice {
+    background: #1a1200;
+    border: 1px solid #78350f;
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    font-size: 12px;
+    color: #fbbf24;
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  .notice-icon { font-size: 14px; flex-shrink: 0; }
+
+  /* ── 푸터 ── */
+  .footer {
+    padding: 20px 32px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-muted);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+</style>
+</head>
+<body>
+
+<!-- 헤더 -->
+<header class="header">
+  <div class="header-left">
+    <h1>반도체 공정 품질 대시보드</h1>
+    <p>SECOM 정제 데이터 기반 설비별 품질 판정 및 공정 조건 모니터링</p>
+  </div>
+  <div class="header-meta">
+    <div class="meta-chip">데이터 기간 <span id="meta-period">—</span></div>
+    <div class="meta-chip">표본 수 <span id="meta-total">—</span></div>
+    <div class="meta-chip">파일 <span>11cha_secom_cleaned.csv</span></div>
+  </div>
+</header>
+
+<!-- 필터 바 -->
+<div class="filter-bar">
+  <span class="filter-label">설비명</span>
+  <div class="filter-group" id="eq-filter"></div>
+  <div class="filter-sep"></div>
+  <span class="filter-label">양품여부</span>
+  <div class="filter-group" id="qc-filter"></div>
+  <button class="reset-btn" onclick="resetFilters()">↺ 초기화</button>
+</div>
+
+<!-- 메인 -->
+<main class="main">
+
+  <!-- KPI -->
+  <div>
+    <p class="section-title">핵심 지표</p>
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">전체 공정 수</div>
+        <div class="kpi-value" id="kpi-total">—</div>
+        <div class="kpi-sub">필터 적용 기준</div>
+      </div>
+      <div class="kpi-card good">
+        <div class="kpi-label">양품</div>
+        <div class="kpi-value" id="kpi-good">—</div>
+        <div class="kpi-sub" id="kpi-good-rate">—</div>
+      </div>
+      <div class="kpi-card bad">
+        <div class="kpi-label">불량</div>
+        <div class="kpi-value" id="kpi-bad">—</div>
+        <div class="kpi-sub" id="kpi-bad-rate">—</div>
+      </div>
+      <div class="kpi-card warn">
+        <div class="kpi-label">불량률</div>
+        <div class="kpi-value" id="kpi-rate">—</div>
+        <div class="kpi-sub">불량 / 전체 × 100</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 경고 -->
+  <div class="notice">
+    <span class="notice-icon">⚠️</span>
+    <span>표본 25건 · 불량 3건의 소표본입니다. 아래 수치와 차트는 <strong>경향 참고용</strong>이며 공정 조건과 불량의 인과관계를 단정할 수 없습니다.</span>
+  </div>
+
+  <!-- 설비별 현황 -->
+  <div>
+    <p class="section-title">설비별 품질 현황</p>
+    <div class="chart-row col2">
+      <div class="chart-card">
+        <h3>설비별 양품·불량 건수</h3>
+        <p>설비명 기준 누적 막대 차트</p>
+        <div id="chart-bar" style="height:280px"></div>
+      </div>
+      <div class="chart-card">
+        <h3>설비별 불량률 (%)</h3>
+        <p>불량 건수 ÷ 설비별 전체 공정 수 × 100</p>
+        <div id="chart-defect-rate" style="height:280px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 공정 조건 분포 -->
+  <div>
+    <p class="section-title">공정 조건 분포 (양품 vs 불량)</p>
+    <div class="chart-row col4">
+      <div class="chart-card">
+        <h3>챔버온도 (°C)</h3>
+        <p>양품·불량별 분포 비교</p>
+        <div id="box-temp" style="height:240px"></div>
+      </div>
+      <div class="chart-card">
+        <h3>압력 (Torr)</h3>
+        <p>양품·불량별 분포 비교</p>
+        <div id="box-pressure" style="height:240px"></div>
+      </div>
+      <div class="chart-card">
+        <h3>가스유량 (sccm)</h3>
+        <p>양품·불량별 분포 비교</p>
+        <div id="box-gas" style="height:240px"></div>
+      </div>
+      <div class="chart-card">
+        <h3>공정시간 (min)</h3>
+        <p>양품·불량별 분포 비교</p>
+        <div id="box-time" style="height:240px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 시계열 -->
+  <div>
+    <p class="section-title">시간 흐름 추이</p>
+    <div class="chart-row">
+      <div class="chart-card">
+        <h3>측정일시 기준 챔버온도·압력 추이</h3>
+        <p>불량 공정은 빨간 마커(▼)로 강조 표시</p>
+        <div id="chart-line" style="height:300px"></div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- 푸터 -->
+<footer class="footer">
+  <span>데이터 출처: 11cha_secom_cleaned.csv · SECOM 반도체 공정 정제 데이터</span>
+  <span>표본 25건 소표본 — 인과관계 단정 불가 · 경향 참고용</span>
+</footer>
+
+<script>
+// ─────────────────────────────────────────
+// 원본 데이터 (CSV 인라인)
+// ─────────────────────────────────────────
+const RAW = [
+  {id:'LOT1001',dt:'2026-06-30 08:00',eq:'ETCH-01',temp:254.0,  pres:99.3,               gas:46.9,time:66,qc:'양품'},
+  {id:'LOT1002',dt:'2026-06-30 09:00',eq:'ETCH-02',temp:252.2,  pres:105.1,              gas:43.3,time:57,qc:'양품'},
+  {id:'LOT1003',dt:'2026-06-30 10:00',eq:'CVD-01', temp:251.9,  pres:90.4,               gas:39.8,time:57,qc:'양품'},
+  {id:'LOT1004',dt:'2026-06-30 11:00',eq:'CVD-02', temp:246.6,  pres:96.36428571428573,  gas:42.9,time:51,qc:'양품'},
+  {id:'LOT1005',dt:'2026-06-30 12:00',eq:'PVD-01', temp:250.5,  pres:92.9,               gas:43.4,time:60,qc:'양품'},
+  {id:'LOT1007',dt:'2026-06-30 14:00',eq:'ETCH-02',temp:249.9,  pres:94.7,               gas:47.5,time:55,qc:'양품'},
+  {id:'LOT1008',dt:'2026-06-30 15:00',eq:'CVD-01', temp:272.2,  pres:106.0,              gas:44.4,time:63,qc:'양품'},
+  {id:'LOT1011',dt:'2026-06-30 18:00',eq:'ETCH-01',temp:244.6,  pres:103.1,              gas:48.1,time:63,qc:'양품'},
+  {id:'LOT1012',dt:'2026-06-30 19:00',eq:'ETCH-02',temp:248.3,  pres:96.36428571428573,  gas:40.5,time:64,qc:'불량'},
+  {id:'LOT1013',dt:'2026-06-30 20:00',eq:'CVD-01', temp:241.1,  pres:94.0,               gas:47.4,time:65,qc:'양품'},
+  {id:'LOT1014',dt:'2026-06-30 21:00',eq:'CVD-02', temp:241.7,  pres:99.6,               gas:47.9,time:63,qc:'양품'},
+  {id:'LOT1016',dt:'2026-06-30 23:00',eq:'ETCH-01',temp:238.6,  pres:105.2,              gas:47.7,time:60,qc:'양품'},
+  {id:'LOT1017',dt:'2026-07-01 00:00',eq:'ETCH-02',temp:261.8,  pres:97.4,               gas:42.6,time:57,qc:'양품'},
+  {id:'LOT1018',dt:'2026-07-01 01:00',eq:'CVD-01', temp:254.0,  pres:105.8,              gas:45.8,time:61,qc:'양품'},
+  {id:'LOT1019',dt:'2026-07-01 02:00',eq:'CVD-02', temp:250.8,  pres:104.8,              gas:44.4,time:58,qc:'양품'},
+  {id:'LOT1020',dt:'2026-07-01 03:00',eq:'PVD-01', temp:260.2,  pres:98.5,               gas:37.0,time:61,qc:'양품'},
+  {id:'LOT1022',dt:'2026-07-01 05:00',eq:'ETCH-02',temp:242.5,  pres:107.0,              gas:44.9,time:53,qc:'양품'},
+  {id:'LOT1023',dt:'2026-07-01 06:00',eq:'CVD-01', temp:250.5,  pres:96.36428571428573,  gas:44.4,time:61,qc:'불량'},
+  {id:'LOT1024',dt:'2026-07-01 07:00',eq:'CVD-02', temp:252.7,  pres:100.0,              gas:47.3,time:55,qc:'양품'},
+  {id:'LOT1025',dt:'2026-07-01 08:00',eq:'PVD-01', temp:256.3,  pres:95.5,               gas:49.2,time:54,qc:'양품'},
+  {id:'LOT1027',dt:'2026-07-01 10:00',eq:'ETCH-02',temp:250.8,  pres:97.5,               gas:40.3,time:60,qc:'양품'},
+  {id:'LOT1028',dt:'2026-07-01 11:00',eq:'CVD-01', temp:254.3,  pres:95.4,               gas:46.9,time:59,qc:'불량'},
+  {id:'LOT1029',dt:'2026-07-01 12:00',eq:'CVD-02', temp:243.7,  pres:98.4,               gas:47.4,time:55,qc:'양품'},
+  {id:'LOT1030',dt:'2026-07-01 13:00',eq:'PVD-01', temp:260.9,  pres:112.7,              gas:44.0,time:59,qc:'양품'},
+  {id:'LOT1003',dt:'2026-06-30 10:00',eq:'ETCH-01',temp:251.9,  pres:90.4,               gas:39.8,time:57,qc:'양품'},
+];
+
+// ─────────────────────────────────────────
+// 필터 상태
+// ─────────────────────────────────────────
+const EQ_LIST = [...new Set(RAW.map(r=>r.eq))].sort();
+const QC_LIST = ['양품','불량'];
+let selEq = new Set(EQ_LIST);
+let selQc = new Set(QC_LIST);
+
+// ─────────────────────────────────────────
+// 공통 Plotly 레이아웃 설정
+// ─────────────────────────────────────────
+const LAYOUT_BASE = {
+  paper_bgcolor:'transparent',
+  plot_bgcolor:'transparent',
+  font:{color:'#7d8590', size:11, family:"'Noto Sans KR',sans-serif"},
+  margin:{t:10,r:16,b:40,l:50},
+  legend:{bgcolor:'transparent', font:{color:'#e6edf3', size:11}},
+  xaxis:{gridcolor:'#21262d', linecolor:'#30363d', tickcolor:'#30363d', zerolinecolor:'#30363d'},
+  yaxis:{gridcolor:'#21262d', linecolor:'#30363d', tickcolor:'#30363d', zerolinecolor:'#30363d'},
+};
+const CFG = {responsive:true, displayModeBar:false};
+
+// ─────────────────────────────────────────
+// 필터 UI 생성
+// ─────────────────────────────────────────
+function buildFilterUI() {
+  const eqDiv = document.getElementById('eq-filter');
+  EQ_LIST.forEach(eq => {
+    const b = document.createElement('button');
+    b.className = 'filter-btn active';
+    b.textContent = eq;
+    b.dataset.eq = eq;
+    b.onclick = () => toggleFilter('eq', eq, b);
+    eqDiv.appendChild(b);
+  });
+
+  const qcDiv = document.getElementById('qc-filter');
+  QC_LIST.forEach(qc => {
+    const b = document.createElement('button');
+    b.className = 'filter-btn active';
+    b.textContent = qc;
+    b.dataset.qc = qc;
+    b.onclick = () => toggleFilter('qc', qc, b);
+    qcDiv.appendChild(b);
+  });
+}
+
+function toggleFilter(type, val, btn) {
+  if (type === 'eq') {
+    if (selEq.has(val)) { selEq.delete(val); btn.classList.remove('active'); }
+    else { selEq.add(val); btn.classList.add('active'); }
+  } else {
+    if (selQc.has(val)) { selQc.delete(val); btn.classList.remove('active'); }
+    else { selQc.add(val); btn.classList.add('active'); }
+  }
+  render();
+}
+
+function resetFilters() {
+  selEq = new Set(EQ_LIST);
+  selQc = new Set(QC_LIST);
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.add('active'));
+  render();
+}
+
+// ─────────────────────────────────────────
+// 필터 적용
+// ─────────────────────────────────────────
+function filtered() {
+  return RAW.filter(r => selEq.has(r.eq) && selQc.has(r.qc));
+}
+
+// ─────────────────────────────────────────
+// 메타 업데이트
+// ─────────────────────────────────────────
+function updateMeta() {
+  const dates = RAW.map(r=>r.dt).sort();
+  document.getElementById('meta-period').textContent =
+    dates[0].slice(0,10) + ' ~ ' + dates[dates.length-1].slice(0,10);
+  document.getElementById('meta-total').textContent = RAW.length + '건';
+}
+
+// ─────────────────────────────────────────
+// KPI 업데이트
+// ─────────────────────────────────────────
+function updateKPI(data) {
+  const total = data.length;
+  const good  = data.filter(r=>r.qc==='양품').length;
+  const bad   = data.filter(r=>r.qc==='불량').length;
+  const rate  = total > 0 ? (bad/total*100).toFixed(1) : '0.0';
+
+  document.getElementById('kpi-total').textContent = total;
+  document.getElementById('kpi-good').textContent  = good;
+  document.getElementById('kpi-bad').textContent   = bad;
+  document.getElementById('kpi-rate').textContent  = rate + '%';
+  document.getElementById('kpi-good-rate').textContent =
+    total > 0 ? '양품률 ' + (good/total*100).toFixed(1) + '%' : '—';
+  document.getElementById('kpi-bad-rate').textContent =
+    total > 0 ? '불량률 ' + (bad/total*100).toFixed(1) + '%' : '—';
+}
+
+// ─────────────────────────────────────────
+// 설비별 누적 막대 차트
+// ─────────────────────────────────────────
+function drawBar(data) {
+  const eqs = EQ_LIST.filter(e => selEq.has(e));
+  const goodCnt = eqs.map(e => data.filter(r=>r.eq===e&&r.qc==='양품').length);
+  const badCnt  = eqs.map(e => data.filter(r=>r.eq===e&&r.qc==='불량').length);
+  const totals  = eqs.map((_,i) => goodCnt[i]+badCnt[i]);
+
+  const traces = [
+    {
+      name:'양품', x:eqs, y:goodCnt, type:'bar',
+      marker:{color:'#22c55e'},
+      text:goodCnt.map((v,i)=> totals[i]>0 ? v+'건 ('+(v/totals[i]*100).toFixed(0)+'%)' : '0건'),
+      textposition:'inside', insidetextanchor:'middle',
+      hovertemplate:'<b>%{x}</b><br>양품: %{y}건<br>비율: %{text}<extra></extra>',
+    },
+    {
+      name:'불량', x:eqs, y:badCnt, type:'bar',
+      marker:{color:'#ef4444'},
+      text:badCnt.map((v,i)=> totals[i]>0 ? v+'건 ('+(v/totals[i]*100).toFixed(0)+'%)' : '0건'),
+      textposition:'inside', insidetextanchor:'middle',
+      hovertemplate:'<b>%{x}</b><br>불량: %{y}건<br>비율: %{text}<extra></extra>',
+    }
+  ];
+
+  const layout = {
+    ...LAYOUT_BASE,
+    barmode:'stack',
+    xaxis:{...LAYOUT_BASE.xaxis, title:{text:'설비명', standoff:8}},
+    yaxis:{...LAYOUT_BASE.yaxis, title:{text:'공정 건수', standoff:8}, dtick:1},
+    legend:{...LAYOUT_BASE.legend, orientation:'h', x:0, y:1.08},
+  };
+
+  Plotly.react('chart-bar', traces, layout, CFG);
+}
+
+// ─────────────────────────────────────────
+// 설비별 불량률 차트
+// ─────────────────────────────────────────
+function drawDefectRate(data) {
+  const eqs = EQ_LIST.filter(e => selEq.has(e));
+  const rates = eqs.map(e => {
+    const tot = data.filter(r=>r.eq===e).length;
+    const bad = data.filter(r=>r.eq===e&&r.qc==='불량').length;
+    return tot > 0 ? parseFloat((bad/tot*100).toFixed(1)) : 0;
+  });
+  const colors = rates.map(r => r > 0 ? '#ef4444' : '#22c55e');
+
+  const traces = [{
+    x: eqs, y: rates, type:'bar',
+    marker:{color:colors},
+    text: rates.map(r=>r.toFixed(1)+'%'),
+    textposition:'outside',
+    hovertemplate:'<b>%{x}</b><br>불량률: %{y:.1f}%<extra></extra>',
+  }];
+
+  const layout = {
+    ...LAYOUT_BASE,
+    xaxis:{...LAYOUT_BASE.xaxis, title:{text:'설비명', standoff:8}},
+    yaxis:{...LAYOUT_BASE.yaxis, title:{text:'불량률 (%)', standoff:8}, range:[0, Math.max(...rates)*1.4+5]},
+  };
+
+  Plotly.react('chart-defect-rate', traces, layout, CFG);
+}
+
+// ─────────────────────────────────────────
+// 박스플롯 공통 함수
+// ─────────────────────────────────────────
+function drawBox(elId, data, field, unit) {
+  const goodVals = data.filter(r=>r.qc==='양품').map(r=>r[field]);
+  const badVals  = data.filter(r=>r.qc==='불량').map(r=>r[field]);
+
+  const traces = [];
+  if (selQc.has('양품') && goodVals.length > 0) {
+    traces.push({
+      y: goodVals, name:'양품', type:'box',
+      marker:{color:'#22c55e'}, line:{color:'#22c55e'},
+      fillcolor:'rgba(34,197,94,0.15)', boxpoints:'all',
+      jitter:0.4, pointpos:0,
+      hovertemplate:'양품<br>'+field+': %{y:.2f} '+unit+'<extra></extra>',
+    });
+  }
+  if (selQc.has('불량') && badVals.length > 0) {
+    traces.push({
+      y: badVals, name:'불량', type:'box',
+      marker:{color:'#ef4444'}, line:{color:'#ef4444'},
+      fillcolor:'rgba(239,68,68,0.15)', boxpoints:'all',
+      jitter:0.4, pointpos:0,
+      hovertemplate:'불량<br>'+field+': %{y:.2f} '+unit+'<extra></extra>',
+    });
+  }
+
+  if (traces.length === 0) {
+    Plotly.react(elId, [], {...LAYOUT_BASE, margin:{t:10,r:16,b:40,l:50}}, CFG);
+    return;
+  }
+
+  const layout = {
+    ...LAYOUT_BASE,
+    margin:{t:10,r:16,b:30,l:50},
+    yaxis:{...LAYOUT_BASE.yaxis, title:{text:unit, standoff:4}},
+    legend:{...LAYOUT_BASE.legend, orientation:'h', x:0, y:1.1},
+    showlegend: traces.length > 1,
+  };
+
+  Plotly.react(elId, traces, layout, CFG);
+}
+
+// ─────────────────────────────────────────
+// 시계열 선 그래프
+// ─────────────────────────────────────────
+function drawLine(data) {
+  const sorted = [...data].sort((a,b)=>a.dt.localeCompare(b.dt));
+  const xs   = sorted.map(r=>r.dt);
+  const temps = sorted.map(r=>r.temp);
+  const press  = sorted.map(r=>r.pres);
+
+  const badRows = sorted.filter(r=>r.qc==='불량');
+
+  const traces = [
+    {
+      x:xs, y:temps, name:'챔버온도 (°C)', type:'scatter', mode:'lines+markers',
+      line:{color:'#3b82f6', width:2},
+      marker:{size:5, color:'#3b82f6'},
+      hovertemplate:'%{x}<br>챔버온도: %{y:.1f}°C<extra></extra>',
+    },
+    {
+      x:xs, y:press, name:'압력 (Torr)', type:'scatter', mode:'lines+markers',
+      line:{color:'#a78bfa', width:2},
+      marker:{size:5, color:'#a78bfa'},
+      yaxis:'y2',
+      hovertemplate:'%{x}<br>압력: %{y:.2f} Torr<extra></extra>',
+    },
+  ];
+
+  // 불량 마커
+  if (badRows.length > 0) {
+    traces.push({
+      x: badRows.map(r=>r.dt),
+      y: badRows.map(r=>r.temp),
+      name:'불량 공정',
+      type:'scatter', mode:'markers',
+      marker:{symbol:'triangle-down', size:14, color:'#ef4444', line:{color:'#fff', width:1.5}},
+      hovertemplate:'<b>불량</b> %{x}<br>챔버온도: %{y:.1f}°C<br>LOT: '+badRows.map(r=>r.id).join(', ')+'<extra></extra>',
+    });
+  }
+
+  const layout = {
+    ...LAYOUT_BASE,
+    margin:{t:10,r:60,b:60,l:60},
+    xaxis:{
+      ...LAYOUT_BASE.xaxis,
+      title:{text:'측정일시', standoff:8},
+      tickangle:-30, tickfont:{size:10},
+    },
+    yaxis:{
+      ...LAYOUT_BASE.yaxis,
+      title:{text:'챔버온도 (°C)', standoff:8},
+      titlefont:{color:'#3b82f6'}, tickfont:{color:'#3b82f6'},
+    },
+    yaxis2:{
+      title:{text:'압력 (Torr)', standoff:8},
+      titlefont:{color:'#a78bfa'}, tickfont:{color:'#a78bfa'},
+      overlaying:'y', side:'right',
+      gridcolor:'transparent', linecolor:'#30363d',
+    },
+    legend:{...LAYOUT_BASE.legend, orientation:'h', x:0, y:1.08},
+  };
+
+  Plotly.react('chart-line', traces, layout, CFG);
+}
+
+// ─────────────────────────────────────────
+// 전체 렌더링
+// ─────────────────────────────────────────
+function render() {
+  const data = filtered();
+  updateKPI(data);
+  drawBar(data);
+  drawDefectRate(data);
+  drawBox('box-temp',     data, 'temp', '°C');
+  drawBox('box-pressure', data, 'pres', 'Torr');
+  drawBox('box-gas',      data, 'gas',  'sccm');
+  drawBox('box-time',     data, 'time', 'min');
+  drawLine(data);
+}
+
+// ─────────────────────────────────────────
+// 초기 실행
+// ─────────────────────────────────────────
+buildFilterUI();
+updateMeta();
+render();
+</script>
+</body>
+</html>
